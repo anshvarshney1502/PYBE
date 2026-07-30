@@ -61,7 +61,7 @@ function OptionCard({ option, onClick, state }) {
         {isCorrect ? '✓' : isWrong ? '✕' : ''}
       </span>
 
-      <span><InlineMarkdown text={option.text} /></span>
+      <span><InlineMarkdown text={option?.text || ''} /></span>
     </button>
   );
 }
@@ -78,7 +78,7 @@ function ReflectionPrompt({ prompt }) {
     }}>
       <span style={{ fontSize: '1.1rem', flexShrink: 0 }}>💭</span>
       <p style={{ fontSize: '0.92rem', color: C.body, lineHeight: 1.65, margin: 0 }}>
-        <InlineMarkdown text={prompt} />
+        <InlineMarkdown text={prompt || ''} />
       </p>
     </div>
   );
@@ -86,8 +86,11 @@ function ReflectionPrompt({ prompt }) {
 
 // ─── Stage 1 Logic Test ─────────────────────────────────────────────────────
 export default function Stage1LogicTest({ caseStudy, onComplete }) {
+  if (!caseStudy || !caseStudy.stage1) return null;
+
   const { stage1, scenario } = caseStudy;
-  const { attempt1, reflections } = stage1;
+  const attempt1 = stage1?.attempt1 ?? [];
+  const reflections = stage1?.reflections ?? {};
 
   const [phase, setPhase]                     = useState(1);
   const [activeReflection, setActiveReflection] = useState(null);
@@ -95,8 +98,9 @@ export default function Stage1LogicTest({ caseStudy, onComplete }) {
   const [attempt2States, setAttempt2States]   = useState({});
   const [completing, setCompleting]           = useState(false);
 
-  // Shuffle helper
+  // Safe shuffle helper
   const shuffle = (arr) => {
+    if (!Array.isArray(arr)) return [];
     const a = [...arr];
     for (let i = a.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -105,30 +109,33 @@ export default function Stage1LogicTest({ caseStudy, onComplete }) {
     return a;
   };
 
-  // Shuffle attempt1 once per case study mount
   const shuffledAttempt1 = useMemo(() => shuffle(attempt1), [attempt1]);
-
-  // Shuffle attempt2 when a reflection becomes active
   const shuffledAttempt2 = useMemo(
-    () => activeReflection ? shuffle(activeReflection.attempt2) : [],
+    () => (activeReflection && Array.isArray(activeReflection.attempt2)) ? shuffle(activeReflection.attempt2) : [],
     [activeReflection]
   );
 
   const handleAttempt1Click = (option, index) => {
+    if (!option) return;
     if (option.status === 'correct') {
       setOptionStates({ [index]: 'selected-correct' });
       setCompleting(true);
-      setTimeout(() => onComplete(), 1000);
+      setTimeout(() => onComplete && onComplete(), 1000);
     } else {
       const states = {};
       shuffledAttempt1.forEach((_, i) => { states[i] = i === index ? 'selected-incorrect' : 'dimmed'; });
       setOptionStates(states);
-      setActiveReflection(reflections[option.routesTo]);
+      const targetRef = reflections[option.routesTo] || {
+        prompt: "Think about this choice carefully.",
+        attempt2: [{ text: "Try the best approach again.", status: "correct" }]
+      };
+      setActiveReflection(targetRef);
       setPhase(2);
     }
   };
 
   const handleAttempt2Click = (option, index) => {
+    if (!option) return;
     const states = {};
     shuffledAttempt2.forEach((_, i) => {
       states[i] = i === index
@@ -137,23 +144,38 @@ export default function Stage1LogicTest({ caseStudy, onComplete }) {
     });
     setAttempt2States(states);
     setCompleting(true);
-    setTimeout(() => onComplete(), 1000);
+    setTimeout(() => onComplete && onComplete(), 1000);
   };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
       {/* ── Scenario card ── */}
       <div style={{ background: C.cardBg, border: `1px solid ${C.border}`, borderRadius: 12, padding: '1.5rem', display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
-        <span style={{ fontSize: '1.5rem', flexShrink: 0 }}>🎯</span>
+        <span style={{ fontSize: '1.5rem', flexShrink: 0 }}>✈️</span>
         <div>
           <p style={{ fontSize: '0.72rem', fontWeight: 700, color: C.label, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '0.5rem', marginTop: 0 }}>
             Scenario
           </p>
-          <p style={{ fontSize: '1.05rem', color: C.text, lineHeight: 1.6, fontWeight: 500, margin: 0 }}>
+          <p style={{ fontSize: '1.05rem', color: C.text, lineHeight: 1.6, fontWeight: 500, margin: 0, whiteSpace: 'pre-line' }}>
             {scenario}
           </p>
         </div>
       </div>
+
+      {/* ── Reflective Question ── */}
+      {caseStudy.reflectiveQuestion && (
+        <div style={{ background: 'rgba(74,222,128,.05)', border: '1px solid rgba(74,222,128,.3)', borderRadius: 12, padding: '1rem 1.25rem', display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+          <span style={{ fontSize: '1.3rem', flexShrink: 0 }}>❓</span>
+          <div>
+            <p style={{ fontSize: '0.72rem', fontWeight: 700, color: C.accent, letterSpacing: '0.08em', textTransform: 'uppercase', margin: '0 0 0.25rem' }}>
+              Reflective Question
+            </p>
+            <p style={{ fontSize: '0.95rem', color: C.text, fontWeight: 600, margin: 0, lineHeight: 1.5 }}>
+              <InlineMarkdown text={caseStudy.reflectiveQuestion} />
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* ── Attempt 1 ── */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>

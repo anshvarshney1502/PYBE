@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { usePyodide, runPython } from './usePyodide.js';
-import { C, parseTemplate, assembleCode } from './utils.jsx';
+import { C, parseTemplate, assembleCode, InlineMarkdown } from './utils.jsx';
 
 // ─── Code display with interactive blank slots ────────────────────────────────
 function CodeDisplay({ parts, filledValues, currentBlankIndex }) {
@@ -59,7 +59,7 @@ function TokenButton({ token, onClick, used, hint }) {
         onMouseEnter={(e) => { if (!used) { e.currentTarget.style.background = C.accentBg; e.currentTarget.style.transform = 'translateY(-1px)'; } }}
         onMouseLeave={(e) => { if (!used) { e.currentTarget.style.background = C.cardBg;   e.currentTarget.style.transform = 'translateY(0)'; } }}
       >
-        {token.value}
+        {token?.value || ''}
       </button>
       {hint && (
         <p style={{ fontSize: '0.72rem', color: C.warning, padding: '0.25rem 0.5rem', background: 'rgba(251,191,36,.1)', border: '1px solid rgba(251,191,36,.3)', borderRadius: 6, margin: 0 }}>
@@ -86,20 +86,22 @@ function TerminalOutput({ output, error }) {
 
 // ─── Stage 3 Guided Code Build ─────────────────────────────────────────────
 export default function Stage3CodeBuild({ caseStudy, onComplete }) {
+  if (!caseStudy || !caseStudy.stage3) return null;
+
   const { stage3 } = caseStudy;
-  const { codeTemplate, tokens } = stage3;
+  const codeTemplate = stage3?.codeTemplate ?? '';
+  const tokens = stage3?.tokens ?? [];
 
   const { pyodide, loading: pyodideLoading, error: pyodideError } = usePyodide();
 
   const { parts, blankCount } = useMemo(() => parseTemplate(codeTemplate), [codeTemplate]);
 
-  // Correct tokens in fill order (uses correctOrder if provided for multi-blank cases)
+  // Correct tokens in fill order
   const correctTokensInOrder = useMemo(() => {
-    if (stage3.correctOrder) return stage3.correctOrder.map((val) => ({ value: val }));
-    return tokens.filter((t) => t.correct);
-  }, [tokens, stage3.correctOrder]);
+    if (stage3?.correctOrder) return stage3.correctOrder.map((val) => ({ value: val }));
+    return tokens.filter((t) => t && t.correct);
+  }, [tokens, stage3?.correctOrder]);
 
-  // Shuffle display order so the correct token is not always first
   const shuffledTokens = useMemo(() => {
     const arr = [...tokens];
     for (let i = arr.length - 1; i > 0; i--) {
@@ -120,13 +122,13 @@ export default function Stage3CodeBuild({ caseStudy, onComplete }) {
   const isFreeForm        = blankCount === 0 && tokens.length === 0;
 
   const handleTokenClick = (token, tokenIndex) => {
-    if (allBlanksFilled) return;
+    if (allBlanksFilled || !token) return;
     const correctToken = correctTokensInOrder[currentBlankIndex];
     if (token.value === correctToken?.value) {
       setFilledValues((prev) => ({ ...prev, [currentBlankIndex]: token.value }));
       setTokenHints({});
     } else {
-      setTokenHints((prev) => ({ ...prev, [tokenIndex]: token.hint || 'Not quite try a different option.' }));
+      setTokenHints((prev) => ({ ...prev, [tokenIndex]: token.hint || 'Try another token option.' }));
     }
   };
 
@@ -151,7 +153,7 @@ export default function Stage3CodeBuild({ caseStudy, onComplete }) {
             ? 'Open-ended exercise design your own case study.'
             : allBlanksFilled
             ? 'All blanks filled! Run the code to see it in action.'
-            : `Fill blank ${currentBlankIndex + 1} of ${blankCount} click the correct token below.`}
+            : `Fill blank ${currentBlankIndex + 1} of ${blankCount}: click the correct token below.`}
         </p>
       </div>
 
@@ -175,11 +177,8 @@ export default function Stage3CodeBuild({ caseStudy, onComplete }) {
           </p>
           <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
             {shuffledTokens.map((token, i) => {
-              // How many times this token value must be placed in blanks (0 = wrong token)
               const quota    = correctTokensInOrder.filter(t => t.value === token.value).length;
-              // How many times it has already been placed
               const timesPlaced = Object.values(filledValues).filter(v => v === token.value).length;
-              // Only exhaust a token if it has a quota > 0 (correct tokens only)
               const isUsed   = quota > 0 && timesPlaced >= quota;
               return (
                 <TokenButton
@@ -217,16 +216,47 @@ export default function Stage3CodeBuild({ caseStudy, onComplete }) {
 
       {runOutput && <TerminalOutput output={runOutput.output} error={runOutput.error} />}
 
-      {/* ── Success card + Continue ── */}
+      {/* ── Success card + Reflection + Learning Outcome + Continue ── */}
       {completed && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', animation: 'csFadeIn .4s ease-out' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', animation: 'csFadeIn .4s ease-out' }}>
           <div style={{ background: 'rgba(74,222,128,.07)', border: '1px solid rgba(74,222,128,.3)', borderRadius: 12, padding: '1rem 1.25rem', display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
             <span style={{ fontSize: '1.5rem' }}>🎉</span>
             <div>
               <p style={{ fontWeight: 600, color: C.success, fontSize: '0.95rem', margin: 0 }}>Code ran successfully!</p>
-              <p style={{ color: C.muted, fontSize: '0.82rem', margin: '0.2rem 0 0' }}>You've completed this case study.</p>
+              <p style={{ color: C.muted, fontSize: '0.82rem', margin: '0.2rem 0 0' }}>You've completed this level's code build.</p>
             </div>
           </div>
+
+          {/* Post-code Reflection callout */}
+          {stage3.reflection && (
+            <div style={{ background: 'rgba(251,191,36,.07)', border: '1px solid rgba(251,191,36,.4)', borderRadius: 12, padding: '1rem 1.25rem', display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
+              <span style={{ fontSize: '1.2rem', flexShrink: 0 }}>💭</span>
+              <div>
+                <p style={{ fontSize: '0.72rem', fontWeight: 700, color: C.warning, letterSpacing: '0.08em', textTransform: 'uppercase', margin: '0 0 0.3rem' }}>
+                  Reflection
+                </p>
+                <p style={{ fontSize: '0.92rem', color: C.body, lineHeight: 1.65, margin: 0 }}>
+                  <InlineMarkdown text={stage3.reflection} />
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Learning Outcome card */}
+          {stage3.learningOutcome && (
+            <div style={{ background: C.accentBg, border: `1px solid ${C.accentBorder}`, borderRadius: 12, padding: '1rem 1.25rem', display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
+              <span style={{ fontSize: '1.2rem', flexShrink: 0 }}>🎯</span>
+              <div>
+                <p style={{ fontSize: '0.72rem', fontWeight: 700, color: C.accent, letterSpacing: '0.08em', textTransform: 'uppercase', margin: '0 0 0.3rem' }}>
+                  Learning Outcome
+                </p>
+                <p style={{ fontSize: '0.92rem', color: C.body, lineHeight: 1.65, fontWeight: 600, margin: 0 }}>
+                  <InlineMarkdown text={stage3.learningOutcome} />
+                </p>
+              </div>
+            </div>
+          )}
+
           <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
             <button
               onClick={onComplete}

@@ -10,6 +10,40 @@ async function apiGet(path) {
   return res.json();
 }
 
+// ─── React Error Boundary for Learning Engine ──────────────────────────────
+class LearningErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error("LearningErrorBoundary caught an error:", error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ maxWidth: 860, margin: '2rem auto', padding: '2rem', textAlign: 'center', background: C.cardBg, border: `1px solid ${C.border}`, borderRadius: 16 }}>
+          <h2 style={{ color: C.error, marginBottom: '0.5rem' }}>Something went wrong</h2>
+          <p style={{ color: C.body, marginBottom: '1.5rem' }}>We encountered an error while running the learning engine.</p>
+          <button
+            onClick={() => {
+              this.setState({ hasError: false, error: null });
+              if (this.props.onReset) this.props.onReset();
+            }}
+            style={{ background: C.darkBg, color: C.darkText, border: 'none', borderRadius: 10, padding: '0.75rem 1.5rem', fontWeight: 600, cursor: 'pointer' }}
+          >
+            🔄 Return to Levels
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 // ─── Level card ───────────────────────────────────────────────────────────────
 function LevelCard({ level, unlocked, completed, onClick }) {
   const lvl = level.levelId;
@@ -45,7 +79,7 @@ function LevelCard({ level, unlocked, completed, onClick }) {
         {completed
           ? 'Completed'
           : unlocked
-          ? `${level.caseStudies?.length ?? 0} case ${(level.caseStudies?.length ?? 0) === 1 ? 'study' : 'studies'}`
+          ? `${level.caseStudies?.length ?? 0} exercise`
           : `Unlock after Level ${lvl - 1}`}
       </span>
     </div>
@@ -67,21 +101,26 @@ export default function LearningPage() {
   // Per-topic completion tracking: { topicId: Set([levelId, ...]) }
   const [topicProgress, setTopicProgress] = useState({});
 
-  // Helpers scoped to the currently selected topic
   const completedLevels = topicProgress[selectedTopicId] ?? new Set();
 
   const markLevelDone = (topicId, lvlId) =>
     setTopicProgress((prev) => ({
       ...prev,
-      [topicId]: new Set([...(prev[topicId] ?? []), lvlId]),
+      [topicId]: new Set([...(prev[topicId] ?? []), Number(lvlId)]),
     }));
 
   const levels = fullTopic?.levels ?? [];
 
-  // Fetch topic list
+  // Fetch topic list and auto-select first topic if none selected
   useEffect(() => {
     apiGet('/topics')
-      .then((data) => { setTopics(data); setTopicsLoading(false); })
+      .then((data) => {
+        setTopics(data);
+        setTopicsLoading(false);
+        if (data && data.length > 0) {
+          setSelectedTopicId(data[0].topicId);
+        }
+      })
       .catch(() => setTopicsLoading(false));
   }, []);
 
@@ -94,131 +133,152 @@ export default function LearningPage() {
       .catch(() => setTopicLoading(false));
   }, [selectedTopicId]);
 
-  const isUnlocked  = (lvl) => lvl === 1 || completedLevels.has(lvl - 1);
-  const isCompleted = (lvl) => completedLevels.has(lvl);
+  const isUnlocked  = (lvl) => Number(lvl) === 1 || completedLevels.has(Number(lvl) - 1);
+  const isCompleted = (lvl) => completedLevels.has(Number(lvl));
 
   // ── Engine view ─────────────────────────────────────────────────────────────
   if (view === 'engine' && selectedLevelId && fullTopic) {
-    const levelData = levels.find((l) => l.levelId === selectedLevelId);
-    if (!levelData) return null;
+    const levelIdNum = Number(selectedLevelId);
+    const levelData = levels.find((l) => Number(l.levelId) === levelIdNum);
+
+    if (!levelData) {
+      return (
+        <div style={{ maxWidth: 860, margin: '0 auto', padding: '2rem', textAlign: 'center' }}>
+          <p style={{ color: C.muted, fontSize: '1rem', marginBottom: '1rem' }}>Level not found.</p>
+          <button
+            onClick={() => setView('levels')}
+            style={{ background: C.darkBg, color: C.darkText, border: 'none', borderRadius: 10, padding: '0.7rem 1.5rem', fontWeight: 600, cursor: 'pointer' }}
+          >
+            ← Back to levels
+          </button>
+        </div>
+      );
+    }
 
     return (
-      <div style={{ maxWidth: 860, margin: '0 auto', padding: '2rem' }}>
-        {/* Back link */}
-        <button
-          onClick={() => setView('levels')}
-          style={{ background: 'none', border: 'none', color: C.body, fontSize: '0.9rem', cursor: 'pointer', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: 0, fontWeight: 500 }}
-        >
-          ← Back to levels
-        </button>
+      <LearningErrorBoundary onReset={() => setView('levels')}>
+        <div style={{ maxWidth: 860, margin: '0 auto', padding: '2rem' }}>
+          {/* Back link */}
+          <button
+            onClick={() => {
+              markLevelDone(selectedTopicId, levelIdNum);
+              setView('levels');
+            }}
+            style={{ background: 'none', border: 'none', color: C.body, fontSize: '0.9rem', cursor: 'pointer', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: 0, fontWeight: 500 }}
+          >
+            ← Back to levels
+          </button>
 
-        {/* Level header */}
-        <div style={{ marginBottom: '1.5rem' }}>
-          <p style={{ fontSize: '0.72rem', fontWeight: 700, color: C.label, letterSpacing: '0.1em', textTransform: 'uppercase', margin: '0 0 0.3rem' }}>
-            {fullTopic.topicName}
-          </p>
-          <h2 style={{ fontSize: '1.3rem', fontWeight: 700, color: C.text, margin: 0 }}>
-            {levelData.title}
-          </h2>
+          {/* Level header */}
+          <div style={{ marginBottom: '1.5rem' }}>
+            <p style={{ fontSize: '0.72rem', fontWeight: 700, color: C.label, letterSpacing: '0.1em', textTransform: 'uppercase', margin: '0 0 0.3rem' }}>
+              {fullTopic.topicName}
+            </p>
+            <h2 style={{ fontSize: '1.3rem', fontWeight: 700, color: C.text, margin: 0 }}>
+              {levelData.title}
+            </h2>
+          </div>
+
+          <CaseStudyEngine
+            key={`${selectedTopicId}-${levelIdNum}`}
+            levelData={levelData}
+            topicLevelCount={levels.length}
+            levelId={levelIdNum}
+            onBack={() => {
+              markLevelDone(selectedTopicId, levelIdNum);
+              setView('levels');
+            }}
+            onGoToLevel={(nextId) => {
+              const nextNum = Number(nextId);
+              markLevelDone(selectedTopicId, levelIdNum);
+              setSelectedLevelId(nextNum);
+              setView('engine');
+            }}
+          />
         </div>
-
-        <CaseStudyEngine
-          key={`${selectedTopicId}-${selectedLevelId}`}
-          levelData={levelData}
-          topicLevelCount={levels.length}
-          levelId={selectedLevelId}
-          onBack={() => {
-            // Mark the current level complete when returning from Level Complete screen
-            markLevelDone(selectedTopicId, selectedLevelId);
-            setView('levels');
-          }}
-          onGoToLevel={(nextId) => {
-            markLevelDone(selectedTopicId, selectedLevelId);
-            setSelectedLevelId(nextId);
-          }}
-        />
-      </div>
+      </LearningErrorBoundary>
     );
   }
 
   // ── Levels view ─────────────────────────────────────────────────────────────
   return (
-    <div style={{ maxWidth: 860, margin: '0 auto', padding: '2rem' }}>
-      {/* Heading */}
-      <div style={{ marginBottom: '2rem' }}>
-        <h1 style={{ fontSize: 'clamp(1.6rem, 4vw, 2.4rem)', fontWeight: 700, color: C.text, marginBottom: '0.5rem' }}>
-          Learning
-        </h1>
-        <p style={{ color: C.body, fontSize: '0.95rem', margin: 0 }}>
-          Pick a topic and dive into the scenario engine.
-        </p>
-      </div>
-
-      {/* Topic selector */}
-      <div style={{ marginBottom: '2rem' }}>
-        <label htmlFor="cs-topic-select" style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: C.label, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
-          Select Topic
-        </label>
-
-        {topicsLoading ? (
-          <p style={{ color: C.muted }}>Loading topics…</p>
-        ) : (
-          <select
-            id="cs-topic-select"
-            value={selectedTopicId}
-            onChange={(e) => {
-              setSelectedTopicId(e.target.value);
-              setView('levels');
-              // Do NOT reset progress it is stored per-topic in topicProgress
-            }}
-            style={{
-              background: C.cardBg, border: `1px solid ${C.border}`, borderRadius: 10,
-              padding: '0.75rem 1rem',
-              color: selectedTopicId ? C.text : C.muted,
-              fontSize: '0.95rem', maxWidth: 380, cursor: 'pointer', outline: 'none',
-            }}
-            onFocus={(e) => (e.target.style.borderColor = '#7b9f27')}
-            onBlur={(e)  => (e.target.style.borderColor = C.border)}
-          >
-            <option value="" disabled> Choose a topic</option>
-            {topics.map((t) => (
-              <option key={t.topicId} value={t.topicId}>{t.topicName}</option>
-            ))}
-          </select>
-        )}
-      </div>
-
-      {/* Level grid */}
-      {selectedTopicId && (
-        <div>
-          <p style={{ fontSize: '0.8rem', fontWeight: 600, color: C.label, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '1rem' }}>
-            Levels
+    <LearningErrorBoundary onReset={() => setView('levels')}>
+      <div style={{ maxWidth: 860, margin: '0 auto', padding: '2rem' }}>
+        {/* Heading */}
+        <div style={{ marginBottom: '2rem' }}>
+          <h1 style={{ fontSize: 'clamp(1.6rem, 4vw, 2.4rem)', fontWeight: 700, color: C.text, marginBottom: '0.5rem' }}>
+            Learning
+          </h1>
+          <p style={{ color: C.body, fontSize: '0.95rem', margin: 0 }}>
+            Pick a topic and dive into the scenario engine.
           </p>
-          {topicLoading ? (
-            <p style={{ color: C.muted }}>Loading levels…</p>
+        </div>
+
+        {/* Topic selector */}
+        <div style={{ marginBottom: '2rem' }}>
+          <label htmlFor="cs-topic-select" style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: C.label, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
+            Select Topic
+          </label>
+
+          {topicsLoading ? (
+            <p style={{ color: C.muted }}>Loading topics…</p>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '1rem' }}>
-              {levels.map((level) => (
-                <LevelCard
-                  key={level.levelId}
-                  level={level}
-                  unlocked={isUnlocked(level.levelId)}
-                  completed={isCompleted(level.levelId)}
-                  onClick={(lvl) => { setSelectedLevelId(lvl); setView('engine'); }}
-                />
+            <select
+              id="cs-topic-select"
+              value={selectedTopicId}
+              onChange={(e) => {
+                setSelectedTopicId(e.target.value);
+                setView('levels');
+              }}
+              style={{
+                background: C.cardBg, border: `1px solid ${C.border}`, borderRadius: 10,
+                padding: '0.75rem 1rem',
+                color: selectedTopicId ? C.text : C.muted,
+                fontSize: '0.95rem', maxWidth: 380, cursor: 'pointer', outline: 'none',
+              }}
+              onFocus={(e) => (e.target.style.borderColor = '#7b9f27')}
+              onBlur={(e)  => (e.target.style.borderColor = C.border)}
+            >
+              <option value="" disabled> Choose a topic</option>
+              {topics.map((t) => (
+                <option key={t.topicId} value={t.topicId}>{t.topicName}</option>
               ))}
-            </div>
+            </select>
           )}
         </div>
-      )}
 
-      {/* Empty state */}
-      {!selectedTopicId && (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '1rem', padding: '4rem 2rem', border: `1px dashed ${C.border}`, borderRadius: 18, color: C.muted, textAlign: 'center' }}>
-          <span style={{ fontSize: '2.5rem' }}>🐍</span>
-          <p style={{ fontSize: '0.95rem', margin: 0, color: C.body }}>Select a topic above to see your levels</p>
-        </div>
-      )}
-    </div>
+        {/* Level grid */}
+        {selectedTopicId && (
+          <div>
+            <p style={{ fontSize: '0.8rem', fontWeight: 600, color: C.label, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '1rem' }}>
+              Levels
+            </p>
+            {topicLoading ? (
+              <p style={{ color: C.muted }}>Loading levels…</p>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '1rem' }}>
+                {levels.map((level) => (
+                  <LevelCard
+                    key={level.levelId}
+                    level={level}
+                    unlocked={isUnlocked(level.levelId)}
+                    completed={isCompleted(level.levelId)}
+                    onClick={(lvl) => { setSelectedLevelId(Number(lvl)); setView('engine'); }}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Empty state */}
+        {!selectedTopicId && (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '1rem', padding: '4rem 2rem', border: `1px dashed ${C.border}`, borderRadius: 18, color: C.muted, textAlign: 'center' }}>
+            <span style={{ fontSize: '2.5rem' }}>🐍</span>
+            <p style={{ fontSize: '0.95rem', margin: 0, color: C.body }}>Select a topic above to see your levels</p>
+          </div>
+        )}
+      </div>
+    </LearningErrorBoundary>
   );
 }

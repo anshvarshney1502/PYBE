@@ -36,6 +36,21 @@ export default function Stage2ConceptReveal({ caseStudy, onComplete }) {
         <ConceptRevealText text={stage2.conceptReveal} />
       </div>
 
+      {/* ── Visualization ── */}
+      {stage2.visualization && (
+        <div style={{
+          background: '#111916', border: `1px solid ${C.accentBorder}`,
+          borderRadius: 12, padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem'
+        }}>
+          <p style={{ fontSize: '0.72rem', fontWeight: 700, color: C.darkText, letterSpacing: '0.1em', textTransform: 'uppercase', margin: 0 }}>
+            📊 Visualization
+          </p>
+          <pre style={{ fontFamily: 'monospace', fontSize: '0.88rem', color: '#e6f2eb', whiteSpace: 'pre-wrap', margin: 0, lineHeight: 1.6 }}>
+            {stage2.visualization}
+          </pre>
+        </div>
+      )}
+
       {/* ── CTA ── */}
       <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
         <button

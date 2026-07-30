@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { C } from './utils.jsx';
 import Stage1LogicTest    from './Stage1LogicTest.jsx';
 import Stage2ConceptReveal from './Stage2ConceptReveal.jsx';
@@ -92,7 +92,7 @@ function LevelCompleteScreen({ onBack, onNext }) {
           Level Complete!
         </h2>
         <p style={{ color: C.body, fontSize: '0.95rem', margin: 0 }}>
-          You've worked through all case studies in this level.
+          You've completed all exercises in this level.
         </p>
       </div>
       <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', justifyContent: 'center' }}>
@@ -117,13 +117,21 @@ function LevelCompleteScreen({ onBack, onNext }) {
 
 // ─── Case Study Engine orchestrates stages across case studies ──────────────
 export default function CaseStudyEngine({ levelData, topicLevelCount, levelId, onBack, onGoToLevel }) {
-  const caseStudies     = levelData.caseStudies;
+  const caseStudies     = levelData?.caseStudies ?? [];
   const [caseStudyIndex, setCaseStudyIndex] = useState(0);
   const [currentStage, setCurrentStage]     = useState(1);
   const [levelDone, setLevelDone]           = useState(false);
 
+  // Reset internal states when levelId changes
+  useEffect(() => {
+    setCaseStudyIndex(0);
+    setCurrentStage(1);
+    setLevelDone(false);
+  }, [levelId]);
+
   const currentCaseStudy = caseStudies[caseStudyIndex];
-  const hasNextLevel     = levelId + 1 <= topicLevelCount;
+  const currentLevelNum  = Number(levelId);
+  const hasNextLevel     = currentLevelNum + 1 <= topicLevelCount;
 
   const handleStage3Complete = () => {
     if (caseStudyIndex < caseStudies.length - 1) {
@@ -138,8 +146,19 @@ export default function CaseStudyEngine({ levelData, topicLevelCount, levelId, o
     return (
       <LevelCompleteScreen
         onBack={onBack}
-        onNext={hasNextLevel ? () => onGoToLevel(levelId + 1) : null}
+        onNext={hasNextLevel ? () => onGoToLevel(currentLevelNum + 1) : null}
       />
+    );
+  }
+
+  if (!currentCaseStudy) {
+    return (
+      <div style={{ textAlign: 'center', padding: '2rem' }}>
+        <p style={{ color: C.muted, marginBottom: '1rem' }}>No case study found for this level.</p>
+        <button onClick={onBack} style={{ background: C.darkBg, color: C.darkText, border: 'none', borderRadius: 10, padding: '0.7rem 1.4rem', cursor: 'pointer' }}>
+          ← Back to Levels
+        </button>
+      </div>
     );
   }
 
@@ -155,21 +174,21 @@ export default function CaseStudyEngine({ levelData, topicLevelCount, levelId, o
 
       {currentStage === 1 && (
         <Stage1LogicTest
-          key={`${caseStudyIndex}-s1`}
+          key={`${levelId}-${caseStudyIndex}-s1`}
           caseStudy={currentCaseStudy}
           onComplete={() => setCurrentStage(2)}
         />
       )}
       {currentStage === 2 && (
         <Stage2ConceptReveal
-          key={`${caseStudyIndex}-s2`}
+          key={`${levelId}-${caseStudyIndex}-s2`}
           caseStudy={currentCaseStudy}
           onComplete={() => setCurrentStage(3)}
         />
       )}
       {currentStage === 3 && (
         <Stage3CodeBuild
-          key={`${caseStudyIndex}-s3`}
+          key={`${levelId}-${caseStudyIndex}-s3`}
           caseStudy={currentCaseStudy}
           onComplete={handleStage3Complete}
         />
