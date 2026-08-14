@@ -4,28 +4,6 @@
 
 **For higher-education faculty | Online | 8 weeks | VLED Lab, IIT Ropar**
 
-**Launch date: 15 August 2026**
-
-This FAQ explains the Guru Vani Faculty Development Programme in simple, participant-friendly language. It is organised around the actual faculty journey—from application and NOC through the four programme verticals, peer review, Project work, and certification.
-
-# Quick Facts
-
-| Item | Key detail |
-|---|---|
-| **Who is it for?** | Higher-education faculty |
-| **Duration** | 8 weeks |
-| **Time commitment** | Approximately 4 hours/week |
-| **Live participation** | Approximately 1.5 hours/week |
-| **Coursework** | 100% ViBe completion |
-| **Standups** | 720 minutes + at least 12 sessions + live-session poll participation |
-| **Activities** | 12 completed cases |
-| **Project** | 1 Ready classroom asset + 2 peer reviews given |
-| **NOC** | Required for completion; can be submitted after starting |
-| **Certificate** | Issued automatically on completion |
-
-# How to Use This FAQ
-
-This FAQ follows the faculty journey from deciding to join through application, participation, peer review, Project work, and certification. Where a rule is fixed, it is stated directly; where a detail depends on programme scheduling or platform implementation, that is made clear.
 
 # 1. About Guru Vani
 
